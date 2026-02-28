@@ -21,7 +21,9 @@ ALLOWED_HOSTS = config('ALLOWED_HOSTS', cast=Csv())
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
+    'channels',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
@@ -39,6 +41,7 @@ INSTALLED_APPS = [
     'allauth.socialaccount',  # ← AGREGAR
     'allauth.socialaccount.providers.google',  # ← AGREGAR
     'django_extensions',
+    'graphene_django',
     
     # Tu aplicación
     'libros',
@@ -54,6 +57,8 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'allauth.account.middleware.AccountMiddleware',
+    'libros.middleware.SecurityMiddleware',
+    'libros.middleware.RateLimitMiddleware',
 ]
 
 ROOT_URLCONF = 'biblioteca_project.urls'
@@ -145,19 +150,18 @@ CORS_ALLOWED_ORIGINS = [
 ]
 CORS_ALLOW_CREDENTIALS = True
 
-
-# ==============================
-# CONFIGURACIÓN DE REST FRAMEWORK
-# ==============================
-REST_FRAMEWORK = {
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 10,
-    'DEFAULT_FILTER_BACKENDS': [
-        'django_filters.rest_framework.DjangoFilterBackend',
-        'rest_framework.filters.SearchFilter',
-        'rest_framework.filters.OrderingFilter',
-    ],
-}
+# Headers permitidos
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
 
 # =======================
 # REST FRAMEWORK CONFIG
@@ -187,6 +191,18 @@ REST_FRAMEWORK = {
         'rest_framework.filters.SearchFilter',
         'rest_framework.filters.OrderingFilter',
     ],
+    
+    'DEFAULT_THROTTLE_CLASSES': [
+        'libros.throttles.BurstRateThrottle',
+        'libros.throttles.SustainedRateThrottle',
+    ],
+    
+    'DEFAULT_THROTTLE_RATES': {
+        'burst': '60/min',        # 60 por minuto
+        'sustained': '1000/day',  # 1000 por día
+        'anon_burst': '20/min',   # Anónimos: 20 por minuto
+        'premium': '10000/day',   # Premium: 10000 por día
+    }
 }
 
 # =======================
@@ -282,9 +298,63 @@ OAUTH2_PROVIDER = {
     'SCOPES': {
         'read': 'Acceso de lectura',
         'write': 'Acceso de escritura',
+        'groups': 'Access to groups - Acceso a grupos de usuario'
     },
     
     # Tipo de token por defecto
     'ACCESS_TOKEN_MODEL': 'oauth2_provider.AccessToken',
     'REFRESH_TOKEN_MODEL': 'oauth2_provider.RefreshToken',
+    'AUTHORIZATION_CODE_EXPIRE_SECONDS': 600,  # 10 minutos
+    'ROTATE_REFRESH_TOKEN': True,
 }
+
+# ASGI Application
+ASGI_APPLICATION = 'biblioteca_project.asgi.application'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer'
+    }
+}
+
+# GraphQL Settings
+GRAPHENE = {
+    'SCHEMA': 'libros.schema.schema',
+    'MIDDLEWARE': [
+        'graphene_django.debug.DjangoDebugMiddleware',
+    ],
+}
+
+# Solo para PRODUCCIÓN (no desarrollo)
+if not DEBUG:
+    # Forzar HTTPS
+    SECURE_SSL_REDIRECT = True
+    
+    # Cookies seguras
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    
+    # Headers de seguridad
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
+    
+    # HSTS (HTTP Strict Transport Security)
+    SECURE_HSTS_SECONDS = 31536000  # 1 año
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    
+    # Proxy SSL headers
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    
+# Orígenes confiables para CSRF
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
+
+# Cookie CSRF segura en producción
+if not DEBUG:
+    CSRF_COOKIE_SECURE = True
+    CSRF_COOKIE_HTTPONLY = True
+    CSRF_COOKIE_SAMESITE = 'Strict'

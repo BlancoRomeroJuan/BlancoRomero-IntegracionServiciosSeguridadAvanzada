@@ -17,6 +17,10 @@ from . import api_views
 from .jwt_views import CustomTokenObtainPairView
 from . import oauth_views
 
+# Importar ViewSets
+from . import api_views
+from . import oauth_views
+
 router = DefaultRouter()
 router.register(r'libros', api_views.LibroViewSet, basename='libro')
 router.register(r'autores', api_views.AutorViewSet, basename='autor')
@@ -66,5 +70,7 @@ urlpatterns = [
     # PUT    /api/libros/{id}/     - Actualizar libro
     # DELETE /api/libros/{id}/     - Eliminar libro
     # Y lo mismo para autores, categorias, prestamos
+    path('intensiva/', api_views.api_intensiva, name='api_intensiva'),
+    path('importar-libro/', api_views.importar_desde_google_books, name='importar_google_books'),
     path('', include(router.urls)),
 ]

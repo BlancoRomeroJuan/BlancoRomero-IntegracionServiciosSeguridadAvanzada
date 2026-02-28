@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat en Tiempo Real - Biblioteca UTH</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 50px rgba(0,0,0,0.2);
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 25px;
+            font-size: 2em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #dc3545; /* Rojo desconectado */
+            transition: background-color 0.3s ease;
+        }
+
+        .status-dot.connected {
+            background-color: #28a745; /* Verde conectado */
+            box-shadow: 0 0 8px rgba(40, 167, 69, 0.6);
+        }
+        
+        #chat-messages {
+            background: #f0f4ff;
+            border: 2px solid #e1e8ff;
+            height: 350px;
+            padding: 15px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            text-align: left;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .message {
+            background: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            font-size: 0.95em;
+            color: #444;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .message strong {
+            color: #667eea;
+            display: block;
+            font-size: 0.85em;
+            margin-bottom: 3px;
+        }
+
+        .system-message {
+            text-align: center;
+            color: #888;
+            font-size: 0.85em;
+            font-style: italic;
+            margin: 5px 0;
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: all 0.3s ease;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn {
+            padding: 12px 25px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .link {
+            display: inline-block;
+            margin-top: 10px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: bold;
+            transition: color 0.3s ease;
+        }
+        
+        .link:hover {
+            color: #1e3c72;
+            text-decoration: underline;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>
+            <div id="status-indicator" class="status-dot" title="Desconectado"></div>
+            💬 Chat General
+        </h1>
+        
+        <div id="chat-messages">
+            <div class="system-message">Conectando al servidor...</div>
+        </div>
+        
+        <div class="input-group">
+            <input type="text" id="mensaje-input" placeholder="Escribe tu mensaje aquí..." autocomplete="off">
+            <button class="btn" onclick="enviarDesdeInput()">Enviar</button>
+        </div>
+
+        <a href="/" class="link">← Volver al inicio</a>
+    </div>
+
+    <script>
+        // Obtener elementos del DOM
+        const messagesDiv = document.getElementById('chat-messages');
+        const inputField = document.getElementById('mensaje-input');
+        const statusDot = document.getElementById('status-indicator');
+
+        // Conectar al WebSocket
+        const chatSocket = new WebSocket(
+            'ws://' + window.location.host + '/ws/chat/general/'
+        );
+
+        chatSocket.onopen = function(e) {
+            console.log('✅ WebSocket conectado');
+            statusDot.classList.add('connected');
+            statusDot.title = "Conectado";
+            messagesDiv.innerHTML = '<div class="system-message">✅ Conexión establecida con el servidor</div>';
+        };
+
+        chatSocket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            
+            if (data.type === 'message') {
+                addMessage(data.username, data.message);
+            } else if (data.type === 'system') {
+                addSystemMessage(data.message);
+            }
+        };
+
+        chatSocket.onclose = function(e) {
+            console.error('❌ WebSocket cerrado');
+            statusDot.classList.remove('connected');
+            statusDot.title = "Desconectado";
+            addSystemMessage('❌ Desconectado del servidor');
+        };
+
+        chatSocket.onerror = function(e) {
+            console.error('Error en WebSocket:', e);
+            addSystemMessage('⚠️ Error de conexión');
+        };
+
+        function sendMessage(message) {
+            chatSocket.send(JSON.stringify({
+                'message': message,
+                'username': 'Administrador' // Aquí puedes integrar el nombre del usuario logueado en un futuro
+            }));
+        }
+
+        function addMessage(username, message) {
+            messagesDiv.innerHTML += `
+                <div class="message">
+                    <strong>${username}</strong> 
+                    ${message}
+                </div>`;
+            scrollToBottom();
+        }
+
+        function addSystemMessage(message) {
+            messagesDiv.innerHTML += `<div class="system-message">${message}</div>`;
+            scrollToBottom();
+        }
+
+        function scrollToBottom() {
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function enviarDesdeInput() {
+            if(inputField.value.trim() !== "") {
+                sendMessage(inputField.value);
+                inputField.value = ''; 
+                inputField.focus(); // Mantener el foco en el input después de enviar
+            }
+        }
+
+        // Permitir enviar con la tecla Enter
+        inputField.addEventListener("keypress", function(event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                enviarDesdeInput();
+            }
+        });
+    </script>
+</body>
+</html>

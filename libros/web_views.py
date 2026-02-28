@@ -17,3 +17,6 @@ def oauth_login(request):
 def jwt_login_page(request):
     """Página de login con JWT (tradicional)"""
     return render(request, 'jwt_login.html')
+
+def chat_page(request):
+    return render(request, 'chat.html')

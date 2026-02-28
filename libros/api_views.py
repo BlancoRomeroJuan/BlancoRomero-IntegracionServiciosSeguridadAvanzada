@@ -10,7 +10,15 @@ from .serializers import (
     LibroSerializer, PrestamoSerializer
 )
 
+from rest_framework.decorators import api_view, throttle_classes
+from rest_framework.response import Response
 
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAdminUser
+from rest_framework.response import Response
+from .external_services import GoogleBooksAPI
+
+from .throttles import BurstRateThrottle
 class CategoriaViewSet(viewsets.ModelViewSet):
     """
     ViewSet para Categorías
@@ -135,3 +143,36 @@ class PrestamoViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(prestamo)
         return Response(serializer.data)
+    
+@api_view(['GET'])
+@throttle_classes([BurstRateThrottle])
+def api_intensiva(request):
+    # Esta ruta tiene throttling especial
+    return Response({'data': 'información'})
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def importar_desde_google_books(request):
+    """Importar libro desde Google Books por ISBN"""
+    isbn = request.data.get('isbn')
+    
+    if not isbn:
+        return Response({
+            'error': 'ISBN es requerido'
+        }, status=400)
+    
+    # Buscar en Google Books
+    data = GoogleBooksAPI.buscar_libro(isbn)
+    
+    if not data:
+        return Response({
+            'error': 'Libro no encontrado en Google Books'
+        }, status=404)
+    
+    # Aquí puedes crear el libro automáticamente
+    # o devolver los datos para que el usuario los complete
+    
+    return Response({
+        'mensaje': 'Libro encontrado',
+        'data': data
+    }, status=200)
